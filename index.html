@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TBN Performance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --tbn-charcoal:#1f1f1d;
+    --tbn-charcoal-soft:#3a3a36;
+    --tbn-cream:#faf7f2;
+    --tbn-card:#ffffff;
+    --tbn-gold:#c9a227;
+    --tbn-grey:#8a8a82;
+    --tbn-border:#e7e2d8;
+    --positive:#2e7d32;
+    --negative:#c0392b;
+    --neutral:#8a8a82;
+    --db:#c2185b;
+    --inika:#5f8d63;
+    --raww:#d9824f;
+    --accent: var(--tbn-gold);
+    --sidebar-width: 250px;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--tbn-cream);
+    color:var(--tbn-charcoal);
+    display:flex;
+    min-height:100vh;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  .sidebar{
+    width:var(--sidebar-width);
+    flex-shrink:0;
+    background:var(--tbn-charcoal);
+    color:#fff;
+    display:flex;
+    flex-direction:column;
+    position:sticky;
+    top:0;
+    align-self:flex-start;
+    height:100vh;
+    overflow-y:auto;
+    border-right:3px solid var(--tbn-gold);
+  }
+  .sidebar-header{
+    padding:22px 18px 18px;
+    border-bottom:1px solid var(--tbn-charcoal-soft);
+  }
+  .sidebar-header h1{ font-size:1.05rem; margin:0 0 4px; font-weight:700; letter-spacing:.01em; }
+  .sidebar-header span{ font-size:.7rem; color:var(--tbn-gold); text-transform:uppercase; letter-spacing:.14em; }
+
+  .nav-section{ padding:10px 0 16px; flex:1; }
+  .nav-item{
+    display:block;
+    width:100%;
+    text-align:left;
+    background:none;
+    border:none;
+    color:#cfcac0;
+    padding:11px 18px;
+    font-size:.88rem;
+    font-weight:600;
+    cursor:pointer;
+    border-left:3px solid transparent;
+    transition:background .12s ease, color .12s ease;
+  }
+  .nav-item.top{ font-size:.95rem; margin-bottom:2px; }
+  .nav-item.brand{ margin-top:10px; color:#fff; }
+  .nav-item.market{
+    padding-left:36px;
+    font-size:.8rem;
+    font-weight:500;
+    color:#b8b3a8;
+  }
+  .nav-item:hover{ background:var(--tbn-charcoal-soft); color:#fff; }
+  .nav-item.active{ background:var(--tbn-charcoal-soft); color:#fff; }
+  .nav-item:not([data-brand]).active{ border-left-color:var(--tbn-gold); }
+  .nav-item[data-brand="DB"].active{ border-left-color:var(--db); }
+  .nav-item[data-brand="INIKA"].active{ border-left-color:var(--inika); }
+  .nav-item[data-brand="RAWW"].active{ border-left-color:var(--raww); }
+
+  .sidebar-footer{
+    padding:14px 18px;
+    border-top:1px solid var(--tbn-charcoal-soft);
+    font-size:.7rem;
+    color:#9c9890;
+    line-height:1.5;
+  }
+
+  /* ── Content area ────────────────────────────────────────── */
+  .content{
+    flex:1;
+    min-width:0;
+    height:100vh;
+    overflow-y:auto;
+  }
+
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:14px;
+    flex-wrap:wrap;
+    padding:14px 28px;
+    background:#fff;
+    border-bottom:1px solid var(--tbn-border);
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  .meta-text{ font-size:.78rem; color:var(--tbn-grey); }
+  .meta-text strong{ color:var(--tbn-charcoal); }
+
+  select#periodSelect, button#reloadBtn{
+    font-size:.85rem;
+    padding:7px 14px;
+    border-radius:6px;
+    border:1px solid var(--tbn-border);
+    background:#fff;
+    color:var(--tbn-charcoal);
+    cursor:pointer;
+  }
+  select#periodSelect:focus, button#reloadBtn:focus{ outline:2px solid var(--tbn-gold); }
+  button#reloadBtn:hover{ background:var(--tbn-cream); }
+
+  main{ padding:24px 28px 60px; max-width:1320px; margin:0 auto; }
+  .page{ display:none; }
+  .page.active{ display:block; animation:fade .25s ease; }
+  @keyframes fade{ from{opacity:0;} to{opacity:1;} }
+
+  .section-title{
+    font-size:1.05rem;
+    font-weight:700;
+    margin:32px 0 12px;
+    padding-bottom:6px;
+    border-bottom:2px solid var(--tbn-border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .section-title .hint{ font-size:.75rem; font-weight:400; color:var(--tbn-grey); }
+  .section-title:first-of-type{ margin-top:8px; }
+
+  /* ── KPI cards ────────────────────────────────────────────── */
+  .kpi-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+  }
+  .kpi-card{
+    background:var(--tbn-card);
+    border:1px solid var(--tbn-border);
+    border-radius:10px;
+    padding:16px 18px;
+    box-shadow:0 1px 2px rgba(0,0,0,.03);
+  }
+  .kpi-card .label{ font-size:.78rem; color:var(--tbn-grey); text-transform:uppercase; letter-spacing:.06em; font-weight:600; }
+  .kpi-card .value{ font-size:1.65rem; font-weight:700; margin:6px 0 8px; color:var(--tbn-charcoal); }
+  .kpi-deltas{ display:flex; gap:14px; flex-wrap:wrap; }
+  .delta{ font-size:.78rem; }
+  .delta .dlabel{ color:var(--tbn-grey); margin-right:4px; }
+  .delta.up{ color:var(--positive); font-weight:700; }
+  .delta.down{ color:var(--negative); font-weight:700; }
+  .delta.flat{ color:var(--neutral); font-weight:700; }
+  .delta.na{ color:var(--tbn-grey); font-style:italic; }
+
+  /* ── Tables ───────────────────────────────────────────────── */
+  .table-wrap{ overflow-x:auto; background:var(--tbn-card); border:1px solid var(--tbn-border); border-radius:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:.85rem; min-width:560px; }
+  th, td{ padding:10px 12px; text-align:right; white-space:nowrap; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2){ text-align:left; }
+  thead th{
+    background:var(--tbn-charcoal);
+    color:#fff;
+    font-weight:600;
+    font-size:.76rem;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    position:sticky;
+    top:0;
+  }
+  tbody tr:nth-child(even){ background:#faf8f4; }
+  tbody tr:hover{ background:#f3ecdd; }
+  tbody td{ border-bottom:1px solid var(--tbn-border); }
+  td.brand-cell{ font-weight:700; }
+  td.pos{ color:var(--positive); }
+  td.neg{ color:var(--negative); }
+  td.muted{ color:var(--tbn-grey); }
+
+  /* ── MoM charts ───────────────────────────────────────────── */
+  .mom-charts-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:16px;
+    margin-bottom:8px;
+  }
+  .mom-charts-grid-3{ grid-template-columns:repeat(3,1fr); }
+  .chart-card{
+    background:var(--tbn-card);
+    border:1px solid var(--tbn-border);
+    border-radius:10px;
+    padding:16px 18px;
+    box-shadow:0 1px 2px rgba(0,0,0,.03);
+    height:280px;
+    position:relative;
+  }
+  .chart-card canvas{ width:100% !important; height:100% !important; }
+  @media (max-width: 900px){
+    .mom-charts-grid{ grid-template-columns:1fr; }
+    .mom-charts-grid-3{ grid-template-columns:repeat(2,1fr); }
+  }
+
+  .brand-pill{
+    display:inline-block;
+    font-size:.68rem;
+    font-weight:700;
+    padding:2px 8px;
+    border-radius:20px;
+    color:#fff;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .brand-pill.DB{ background:var(--db); }
+  .brand-pill.INIKA{ background:var(--inika); }
+  .brand-pill.RAWW{ background:var(--raww); }
+
+  .page-head{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+    margin-bottom:4px;
+  }
+  .page-head h2{ margin:0; font-size:1.4rem; }
+  .page-head .accent-bar{ width:38px; height:6px; border-radius:3px; background:var(--tbn-gold); }
+  .page[data-brand="DB"] .accent-bar{ background:var(--db); }
+  .page[data-brand="INIKA"] .accent-bar{ background:var(--inika); }
+  .page[data-brand="RAWW"] .accent-bar{ background:var(--raww); }
+
+  .status-banner{
+    background:#fff8e1;
+    border:1px solid var(--tbn-gold);
+    border-radius:8px;
+    padding:14px 18px;
+    font-size:.85rem;
+    margin-bottom:18px;
+    line-height:1.5;
+  }
+  .status-banner.error{ background:#fdecea; border-color:var(--negative); }
+  .status-banner code{ background:#00000010; padding:1px 5px; border-radius:4px; }
+
+  footer{
+    text-align:center;
+    font-size:.75rem;
+    color:var(--tbn-grey);
+    padding:24px 0 40px;
+  }
+
+  /* ── Responsive ───────────────────────────────────────────── */
+  @media (max-width: 900px){
+    body{ flex-direction:column; }
+    .sidebar{
+      width:100%;
+      height:auto;
+      position:relative;
+      flex-direction:row;
+      overflow-x:auto;
+      overflow-y:hidden;
+      border-right:none;
+      border-bottom:3px solid var(--tbn-gold);
+    }
+    .sidebar-header{ display:none; }
+    .nav-section{ display:flex; padding:0; }
+    .nav-item{ white-space:nowrap; border-left:none; border-bottom:3px solid transparent; padding:14px 16px; }
+    .nav-item.market{ padding-left:16px; }
+    .nav-item.brand{ margin-top:0; }
+    .nav-item.active{ border-bottom-color:var(--tbn-gold); }
+    .nav-item[data-brand="DB"].active{ border-bottom-color:var(--db); border-left-color:transparent; }
+    .nav-item[data-brand="INIKA"].active{ border-bottom-color:var(--inika); border-left-color:transparent; }
+    .nav-item[data-brand="RAWW"].active{ border-bottom-color:var(--raww); border-left-color:transparent; }
+    .sidebar-footer{ display:none; }
+    .content{ height:auto; }
+    .kpi-grid{ grid-template-columns:repeat(2,1fr); }
+    main{ padding:16px; }
+  }
+  @media (max-width: 540px){
+    .kpi-grid{ grid-template-columns:1fr; }
+    .mom-charts-grid-3{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-header">
+    <h1>TBN Performance Dashboard</h1>
+    <span>Total Beauty Network</span>
+  </div>
+  <div class="nav-section" id="navSection"></div>
+  <div class="sidebar-footer" id="sidebarFooter">Data refreshes every 6 hours</div>
+</nav>
+
+<div class="content">
+  <div class="topbar">
+    <span class="meta-text" id="lastUpdated">Loading data…</span>
+    <select id="periodSelect" aria-label="Time range">
+      <option value="last7">Last 7 Days</option>
+      <option value="mtd" selected>Current Month (MTD)</option>
+      <option value="last30">Last 30 Days</option>
+    </select>
+    <button id="reloadBtn" title="Reload data now">Reload</button>
+  </div>
+
+  <main>
+    <div id="setupBanner"></div>
+
+    <div id="pagesContainer">
+      <!-- ════════════════════ TOTAL SUMMARY ════════════════════ -->
+      <section class="page active" data-page="summary">
+        <div class="page-head">
+          <div class="accent-bar"></div>
+          <h2>Total Summary — All Brands</h2>
+        </div>
+
+        <div class="section-title">Overall Performance<span class="hint">vs prior period &amp; same period last year</span></div>
+        <div class="kpi-grid" id="kpi-summary"></div>
+
+        <div class="section-title">ROAS by Brand &amp; Market <span class="hint">Google Ads &amp; Meta — Last 7 Days and Month to Date</span></div>
+        <div class="table-wrap"><table id="roasTable"></table></div>
+
+        <div class="section-title">Google Ads Summary<span class="hint" id="periodLabelGoogle-summary"></span></div>
+        <div class="kpi-grid" id="kpiGoogle-summary"></div>
+
+        <div class="section-title">Meta Summary<span class="hint" id="periodLabelMeta-summary"></span></div>
+        <div class="kpi-grid" id="kpiMeta-summary"></div>
+
+        <div class="section-title">Shopify Summary<span class="hint" id="periodLabelShopify-summary"></span></div>
+        <div class="kpi-grid" id="kpiShopify-summary"></div>
+
+        <div class="section-title">Month over Month — Google Ads <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartGoogleSpend-summary"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRevenue-summary"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRoas-summary"></canvas></div>
+        </div>
+
+        <div class="section-title">Month over Month — Meta <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartMetaSpend-summary"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRevenue-summary"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRoas-summary"></canvas></div>
+        </div>
+
+        <div class="section-title">Brand &amp; Market Breakdown <span class="hint" id="periodLabel-summary"></span></div>
+        <div class="table-wrap"><table id="breakdownTable-summary"></table></div>
+      </section>
+
+      <!-- ════════════════════ BRAND PAGES (templated) ════════════════════ -->
+      <section class="page" data-page="DB" data-brand="DB">
+        <div class="page-head"><div class="accent-bar"></div><h2>DB Designer Brands</h2></div>
+        <div class="section-title">Overall Performance<span class="hint">vs prior period &amp; same period last year</span></div>
+        <div class="kpi-grid" id="kpi-DB"></div>
+        <div class="section-title">Google Ads Summary<span class="hint" id="periodLabelGoogle-DB"></span></div>
+        <div class="kpi-grid" id="kpiGoogle-DB"></div>
+        <div class="section-title">Meta Summary<span class="hint" id="periodLabelMeta-DB"></span></div>
+        <div class="kpi-grid" id="kpiMeta-DB"></div>
+        <div class="section-title">Shopify Summary<span class="hint" id="periodLabelShopify-DB"></span></div>
+        <div class="kpi-grid" id="kpiShopify-DB"></div>
+        <div class="section-title">Month over Month — Google Ads <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartGoogleSpend-DB"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRevenue-DB"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRoas-DB"></canvas></div>
+        </div>
+
+        <div class="section-title">Month over Month — Meta <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartMetaSpend-DB"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRevenue-DB"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRoas-DB"></canvas></div>
+        </div>
+        <div class="section-title">Markets / Regions <span class="hint" id="periodLabel-DB"></span></div>
+        <div class="table-wrap"><table id="regionTable-DB"></table></div>
+      </section>
+
+      <section class="page" data-page="INIKA" data-brand="INIKA">
+        <div class="page-head"><div class="accent-bar"></div><h2>INIKA Organic</h2></div>
+        <div class="section-title">Overall Performance<span class="hint">vs prior period &amp; same period last year</span></div>
+        <div class="kpi-grid" id="kpi-INIKA"></div>
+        <div class="section-title">Google Ads Summary<span class="hint" id="periodLabelGoogle-INIKA"></span></div>
+        <div class="kpi-grid" id="kpiGoogle-INIKA"></div>
+        <div class="section-title">Meta Summary<span class="hint" id="periodLabelMeta-INIKA"></span></div>
+        <div class="kpi-grid" id="kpiMeta-INIKA"></div>
+        <div class="section-title">Shopify Summary<span class="hint" id="periodLabelShopify-INIKA"></span></div>
+        <div class="kpi-grid" id="kpiShopify-INIKA"></div>
+        <div class="section-title">Month over Month — Google Ads <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartGoogleSpend-INIKA"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRevenue-INIKA"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRoas-INIKA"></canvas></div>
+        </div>
+
+        <div class="section-title">Month over Month — Meta <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartMetaSpend-INIKA"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRevenue-INIKA"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRoas-INIKA"></canvas></div>
+        </div>
+        <div class="section-title">Markets / Regions <span class="hint" id="periodLabel-INIKA"></span></div>
+        <div class="table-wrap"><table id="regionTable-INIKA"></table></div>
+      </section>
+
+      <section class="page" data-page="RAWW" data-brand="RAWW">
+        <div class="page-head"><div class="accent-bar"></div><h2>RAWW Cosmetics</h2></div>
+        <div class="section-title">Overall Performance<span class="hint">vs prior period &amp; same period last year</span></div>
+        <div class="kpi-grid" id="kpi-RAWW"></div>
+        <div class="section-title">Google Ads Summary<span class="hint" id="periodLabelGoogle-RAWW"></span></div>
+        <div class="kpi-grid" id="kpiGoogle-RAWW"></div>
+        <div class="section-title">Meta Summary<span class="hint" id="periodLabelMeta-RAWW"></span></div>
+        <div class="kpi-grid" id="kpiMeta-RAWW"></div>
+        <div class="section-title">Shopify Summary<span class="hint" id="periodLabelShopify-RAWW"></span></div>
+        <div class="kpi-grid" id="kpiShopify-RAWW"></div>
+        <div class="section-title">Month over Month — Google Ads <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartGoogleSpend-RAWW"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRevenue-RAWW"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRoas-RAWW"></canvas></div>
+        </div>
+
+        <div class="section-title">Month over Month — Meta <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartMetaSpend-RAWW"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRevenue-RAWW"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRoas-RAWW"></canvas></div>
+        </div>
+        <div class="section-title">Markets / Regions <span class="hint" id="periodLabel-RAWW"></span></div>
+        <div class="table-wrap"><table id="regionTable-RAWW"></table></div>
+      </section>
+
+      <!-- Market-level pages are generated by buildMarketPages() below -->
+    </div>
+
+    <footer>
+      TBN Performance Dashboard · Data refreshes automatically every 6 hours via Google Sheets · Built for Total Beauty Network
+    </footer>
+  </main>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   CONFIG — fill in your spreadsheet ID once, then publish the two
+   tabs below as CSV (see README for step-by-step instructions).
+   Until SPREADSHEET_ID is set, the dashboard shows sample data so
+   you can preview the layout.
+   ════════════════════════════════════════════════════════════════ */
+const CONFIG = {
+  SPREADSHEET_ID: '1DAScvOQ7a4qzy2VtvmBY9AHUEjRnaAuJAQOhui3zH9U', // same ID as SPREADSHEET_ID in the Apps Script
+  DASHBOARD_TAB: 'Dashboard Data',
+  MONTHLY_TRENDS_TAB: 'Monthly Trends',
+  AUTO_REFRESH_MINUTES: 30 // how often the browser re-fetches data in the background
+};
+
+const BRAND_META = {
+  DB:    { label: 'DB Designer Brands', markets: ['AU','NZ'] },
+  INIKA: { label: 'INIKA Organic',      markets: ['AU','US','NZ','UK'] },
+  RAWW:  { label: 'RAWW Cosmetics',     markets: ['AU'] }
+};
+const BRAND_ORDER = ['DB','INIKA','RAWW'];
+const PERIOD_LABELS = { mtd: 'Current Month (MTD)', last7: 'Last 7 Days', last30: 'Last 30 Days' };
+
+function marketId(brand, market){ return brand + '__' + market; }
+
+let dashboardData = [];
+let monthlyTrendsData = [];
+let currentPeriod = 'mtd';
+
+// Per-brand/market daily baseline figures, shared by the sample data
+// generators for "Dashboard Data" and "Monthly Trends".
+const SAMPLE_BASE = {
+  DB:    { AU: { g:180, m:140, rev:850,  ord:9  }, NZ: { g:60,  m:50,  rev:300,  ord:3  } },
+  INIKA: { AU: { g:220, m:180, rev:1100, ord:12 }, US: { g:300, m:260, rev:1500, ord:14 },
+           NZ: { g:50,  m:40,  rev:260,  ord:2  }, UK: { g:150, m:120, rev:700,  ord:6  } },
+  RAWW:  { AU: { g:140, m:110, rev:620,  ord:6  } }
+};
+
+/* ── Layout: sidebar + market pages ─────────────────────────── */
+function buildSidebar(){
+  const nav = document.getElementById('navSection');
+  let html = `<button class="nav-item top active" data-page="summary">Total Summary</button>`;
+  BRAND_ORDER.forEach(brand => {
+    html += `<button class="nav-item brand" data-brand="${brand}" data-page="${brand}">${BRAND_META[brand].label}</button>`;
+    BRAND_META[brand].markets.forEach(market => {
+      html += `<button class="nav-item market" data-brand="${brand}" data-page="${marketId(brand, market)}">${market}</button>`;
+    });
+  });
+  nav.innerHTML = html;
+}
+
+function buildMarketPages(){
+  const container = document.getElementById('pagesContainer');
+  BRAND_ORDER.forEach(brand => {
+    BRAND_META[brand].markets.forEach(market => {
+      const id = marketId(brand, market);
+      const section = document.createElement('section');
+      section.className = 'page';
+      section.dataset.page = id;
+      section.dataset.brand = brand;
+      section.innerHTML = `
+        <div class="page-head"><div class="accent-bar"></div><h2>${BRAND_META[brand].label} — ${market}</h2></div>
+        <div class="section-title">Overall Performance<span class="hint">vs prior period &amp; same period last year</span></div>
+        <div class="kpi-grid" id="kpi-${id}"></div>
+        <div class="section-title">Google Ads Summary<span class="hint" id="periodLabelGoogle-${id}"></span></div>
+        <div class="kpi-grid" id="kpiGoogle-${id}"></div>
+        <div class="section-title">Meta Summary<span class="hint" id="periodLabelMeta-${id}"></span></div>
+        <div class="kpi-grid" id="kpiMeta-${id}"></div>
+        <div class="section-title">Shopify Summary<span class="hint" id="periodLabelShopify-${id}"></span></div>
+        <div class="kpi-grid" id="kpiShopify-${id}"></div>
+        <div class="section-title">Month over Month — Google Ads <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartGoogleSpend-${id}"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRevenue-${id}"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartGoogleRoas-${id}"></canvas></div>
+        </div>
+
+        <div class="section-title">Month over Month — Meta <span class="hint">Spend, Revenue &amp; ROAS, 12-month trend</span></div>
+        <div class="mom-charts-grid mom-charts-grid-3">
+          <div class="chart-card"><canvas id="trendChartMetaSpend-${id}"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRevenue-${id}"></canvas></div>
+          <div class="chart-card"><canvas id="trendChartMetaRoas-${id}"></canvas></div>
+        </div>
+      `;
+      container.appendChild(section);
+    });
+  });
+}
+
+function setupNavigation(){
+  document.getElementById('navSection').addEventListener('click', (e) => {
+    const btn = e.target.closest('.nav-item');
+    if (!btn) return;
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const page = document.querySelector(`.page[data-page="${btn.dataset.page}"]`);
+    if (page) page.classList.add('active');
+    document.querySelector('.content').scrollTo(0, 0);
+  });
+}
+
+/* ── CSV loading ─────────────────────────────────────────────── */
+function csvUrl(tabName){
+  return `https://docs.google.com/spreadsheets/d/${CONFIG.SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+}
+
+function loadCsv(url){
+  return new Promise((resolve, reject) => {
+    Papa.parse(url, {
+      download: true,
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+      complete: (res) => resolve(res.data || []),
+      error: (err) => reject(err)
+    });
+  });
+}
+
+async function loadAll(){
+  const banner = document.getElementById('setupBanner');
+  const notConfigured = !CONFIG.SPREADSHEET_ID || CONFIG.SPREADSHEET_ID === 'PASTE_YOUR_SPREADSHEET_ID_HERE';
+
+  if (notConfigured) {
+    dashboardData = generateSampleData();
+    monthlyTrendsData = generateSampleMonthlyTrends();
+    banner.innerHTML = `<div class="status-banner">
+      <strong>Showing sample data.</strong> This is randomly generated so you can preview the layout.
+      To connect your live Google Sheet, open this file and set <code>CONFIG.SPREADSHEET_ID</code> at the top
+      of the script (see the README for the full setup steps).
+    </div>`;
+    document.getElementById('lastUpdated').innerHTML = `<strong>Sample data</strong> · not yet connected`;
+    renderAll();
+    return;
+  }
+
+  try {
+    const [dash, monthly] = await Promise.all([
+      loadCsv(csvUrl(CONFIG.DASHBOARD_TAB)),
+      loadCsv(csvUrl(CONFIG.MONTHLY_TRENDS_TAB))
+    ]);
+    dashboardData = dash.filter(r => r.Channel);
+    monthlyTrendsData = monthly.filter(r => r.Channel);
+    banner.innerHTML = '';
+    document.getElementById('lastUpdated').innerHTML =
+      `Data loaded <strong>${new Date().toLocaleString('en-AU', { dateStyle:'medium', timeStyle:'short' })}</strong> · underlying figures refresh every 6 hours`;
+    renderAll();
+  } catch (err) {
+    banner.innerHTML = `<div class="status-banner error">
+      <strong>Couldn't load data.</strong> Check that <code>CONFIG.SPREADSHEET_ID</code> is correct and that the
+      "Dashboard Data" tab is shared as "Anyone with the link can view".<br>
+      Error: ${err.message || err}
+    </div>`;
+    document.getElementById('lastUpdated').textContent = 'Load failed';
+  }
+}
+
+/* ── Sample data generator (used until CONFIG.SPREADSHEET_ID is set) ─ */
+function generateSampleData(){
+  const dash = [];
+  const base = SAMPLE_BASE;
+
+  const jitter = (mult) => 1 + (Math.random() - 0.5) * mult;
+  const mtdDays = new Date().getDate() - 1 || 1; // days elapsed in MTD (excludes today)
+
+  // One entry per Dashboard Data period key. "growth" is a multiplier applied
+  // relative to the "current" period, so comparison cards show a plausible
+  // (and mostly positive) PoP/YoY/DoD delta.
+  const periods = {
+    mtd:             { days: mtdDays, growth: 1    },
+    mtd_prior:       { days: mtdDays, growth: 0.90 },
+    mtd_lastyear:    { days: mtdDays, growth: 0.78 },
+    last7:           { days: 7,       growth: 1    },
+    last7_prior:     { days: 7,       growth: 0.93 },
+    last7_lastyear:  { days: 7,       growth: 0.80 },
+    last30:          { days: 30,      growth: 1    },
+    last30_prior:    { days: 30,      growth: 0.91 },
+    last30_lastyear: { days: 30,      growth: 0.76 },
+    yesterday:       { days: 1,       growth: 1    },
+    daybefore:       { days: 1,       growth: 0.95 }
+  };
+
+  Object.keys(base).forEach(brand => {
+    Object.keys(base[brand]).forEach(market => {
+      const b = base[brand][market];
+      Object.keys(periods).forEach(period => {
+        const { days, growth } = periods[period];
+        const factor = days * growth;
+        const gSpend = Math.round(b.g * factor * jitter(0.15));
+        const mSpend = Math.round(b.m * factor * jitter(0.15));
+        const gRev = Math.round(gSpend * (1.8 + Math.random() * 1.0));
+        const mRev = Math.round(mSpend * (1.6 + Math.random() * 1.2));
+        const netSales = Math.round(b.rev * factor * jitter(0.15));
+        const totalSpend = gSpend + mSpend;
+        const orders = Math.round(b.ord * factor * jitter(0.15));
+
+        dash.push({ Period: period, Channel: 'Google Ads', Brand: brand, Market: market,
+          Spend: gSpend, Revenue: gRev, ROAS: gSpend > 0 ? gRev / gSpend : '',
+          Conversions: Math.round(gSpend / 35), Clicks: Math.round(gSpend * 2.5), ConvRate: 2.8,
+          Orders: '', Budget: Math.round(gSpend * 1.1), Pacing: 0.95 });
+        dash.push({ Period: period, Channel: 'Meta', Brand: brand, Market: market,
+          Spend: mSpend, Revenue: mRev, ROAS: mSpend > 0 ? mRev / mSpend : '',
+          Conversions: Math.round(mSpend / 40), Clicks: Math.round(mSpend * 3), ConvRate: 1.9,
+          Orders: '', Budget: Math.round(mSpend * 1.1), Pacing: 0.9 });
+        dash.push({ Period: period, Channel: 'Shopify', Brand: brand, Market: market,
+          Spend: 0, Revenue: netSales, ROAS: '', Conversions: '', Clicks: '', ConvRate: '',
+          Orders: orders, Budget: '', Pacing: '' });
+        dash.push({ Period: period, Channel: 'Combined', Brand: brand, Market: market,
+          Spend: totalSpend, Revenue: netSales, ROAS: totalSpend > 0 ? netSales / totalSpend : '',
+          Conversions: '', Clicks: '', ConvRate: '', Orders: orders, Budget: '', Pacing: '' });
+      });
+    });
+  });
+
+  return dash;
+}
+
+// 12 months of sample Spend/Revenue/ROAS per channel/brand/market, for the
+// "Monthly Trends" tab equivalent (mirrors buildMonthlyTrendRows() output).
+function generateSampleMonthlyTrends(){
+  const rows = [];
+  const jitter = (mult) => 1 + (Math.random() - 0.5) * mult;
+  const months = last12MonthKeys();
+
+  Object.keys(SAMPLE_BASE).forEach(brand => {
+    Object.keys(SAMPLE_BASE[brand]).forEach(market => {
+      const b = SAMPLE_BASE[brand][market];
+      months.forEach((m, idx) => {
+        // Mild upward trend over the 12 months so the line charts aren't flat.
+        const trend = 0.85 + (idx / 11) * 0.3;
+        const days = 30;
+        ['Google Ads','Meta'].forEach(channel => {
+          const baseSpend = channel === 'Google Ads' ? b.g : b.m;
+          const spend = Math.round(baseSpend * days * trend * jitter(0.15));
+          const revMult = channel === 'Google Ads' ? (1.8 + Math.random() * 1.0) : (1.6 + Math.random() * 1.2);
+          const revenue = Math.round(spend * revMult);
+          rows.push({
+            YearMonth: m.key, Channel: channel, Brand: brand, Market: market,
+            Spend: spend, Revenue: revenue, ROAS: spend > 0 ? revenue / spend : 0
+          });
+        });
+      });
+    });
+  });
+
+  return rows;
+}
+
+/* ── Data helpers ────────────────────────────────────────────── */
+function num(v){ return (typeof v === 'number' && !isNaN(v)) ? v : 0; }
+
+// Returns the 12 'YYYY-MM' month keys covering 11 months ago through the
+// current month (oldest first), each paired with a short display label.
+function last12MonthKeys(){
+  const out = [];
+  const today = new Date();
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    out.push({ key: `${d.getFullYear()}-${mm}`, label: `${monthNames[d.getMonth()]} ${String(d.getFullYear()).slice(-2)}` });
+  }
+  return out;
+}
+
+function sumMonthly(yearMonth, channel, brand, market){
+  return monthlyTrendsData.filter(r =>
+    r.YearMonth === yearMonth &&
+    r.Channel === channel &&
+    (!brand || r.Brand === brand) &&
+    (!market || r.Market === market)
+  );
+}
+
+function aggregateMonthly(rows){
+  const spend = rows.reduce((a,r)=>a+num(r.Spend),0);
+  const revenue = rows.reduce((a,r)=>a+num(r.Revenue),0);
+  return { spend, revenue, roas: spend>0 ? revenue/spend : 0 };
+}
+
+function sumDashboard(period, channel, brand, market){
+  return dashboardData.filter(r =>
+    r.Period === period &&
+    r.Channel === channel &&
+    (!brand || r.Brand === brand) &&
+    (!market || r.Market === market)
+  );
+}
+
+function aggregate(rows){
+  const spend = rows.reduce((a,r)=>a+num(r.Spend),0);
+  const revenue = rows.reduce((a,r)=>a+num(r.Revenue),0);
+  const orders = rows.reduce((a,r)=>a+num(r.Orders),0);
+  const conversions = rows.reduce((a,r)=>a+num(r.Conversions),0);
+  const clicks = rows.reduce((a,r)=>a+num(r.Clicks),0);
+  return { spend, revenue, orders, conversions, clicks, roas: spend>0 ? revenue/spend : 0 };
+}
+
+/* ── Formatting ──────────────────────────────────────────────── */
+function fmtCurrency(v){
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return '$' + Number(v).toLocaleString('en-AU', { maximumFractionDigits: 0 });
+}
+function fmtNumber(v){
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return Number(v).toLocaleString('en-AU', { maximumFractionDigits: 0 });
+}
+function fmtRoas(v){
+  if (v === null || v === undefined || isNaN(v) || v === 0) return '—';
+  return Number(v).toFixed(2) + 'x';
+}
+function fmtRoasCell(rows){
+  // rows: array with one Dashboard Data row (or empty)
+  if (!rows.length) return '—';
+  const r = rows[0];
+  if (r.Spend === '' || r.Spend === null || r.Spend === undefined || Number(r.Spend) === 0) return '—';
+  return fmtRoas(num(r.ROAS));
+}
+function pctDelta(curr, prev){
+  if (prev === 0 || prev === null || prev === undefined) return null;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+function deltaBadge(curr, comparison, label, invertColor){
+  if (!comparison || !comparison.available) {
+    return `<span class="delta na"><span class="dlabel">${label}</span>n/a — building history</span>`;
+  }
+  const pct = pctDelta(curr, comparison.value);
+  if (pct === null) return `<span class="delta na"><span class="dlabel">${label}</span>n/a</span>`;
+  let cls = pct > 0.05 ? 'up' : (pct < -0.05 ? 'down' : 'flat');
+  if (invertColor) cls = (cls === 'up') ? 'down' : (cls === 'down' ? 'up' : 'flat');
+  const arrow = pct > 0.05 ? '▲' : (pct < -0.05 ? '▼' : '▬');
+  return `<span class="delta ${cls}"><span class="dlabel">${label}</span>${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
+}
+
+/* ── KPI rendering ───────────────────────────────────────────── */
+// Aggregates a channel's current period plus the matching _prior and
+// _lastyear rows, so cards can show "vs prior period" / "vs last year".
+function periodComparison(periodKey, channel, brand, market){
+  const curRows = sumDashboard(periodKey, channel, brand, market);
+  const popRows = sumDashboard(periodKey + '_prior', channel, brand, market);
+  const yoyRows = sumDashboard(periodKey + '_lastyear', channel, brand, market);
+  return {
+    cur: aggregate(curRows),
+    pop: { available: popRows.length > 0, value: aggregate(popRows) },
+    yoy: { available: yoyRows.length > 0, value: aggregate(yoyRows) }
+  };
+}
+
+// Renders an array of { label, value, raw, pop:{available,value}, yoy:{available,value} }
+// cards into a .kpi-grid container, each with "vs prior period" / "vs last year" deltas.
+function renderKpiCards(containerId, cards){
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = cards.map(c => `
+    <div class="kpi-card">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}</div>
+      <div class="kpi-deltas">
+        ${deltaBadge(c.raw, c.pop, 'vs prior period')}
+        ${deltaBadge(c.raw, c.yoy, 'vs last year')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderKPIs(containerId, brand, market){
+  const cmp = periodComparison(currentPeriod, 'Combined', brand, market);
+  const cur = cmp.cur, pop = cmp.pop.value, yoy = cmp.yoy.value;
+
+  const cards = [
+    { label: 'Overall Spend', value: fmtCurrency(cur.spend), raw: cur.spend,
+      pop: { available: cmp.pop.available, value: pop.spend }, yoy: { available: cmp.yoy.available, value: yoy.spend } },
+    { label: 'Overall Revenue (Net Sales)', value: fmtCurrency(cur.revenue), raw: cur.revenue,
+      pop: { available: cmp.pop.available, value: pop.revenue }, yoy: { available: cmp.yoy.available, value: yoy.revenue } },
+    { label: 'Avg. ROAS (Combined)', value: fmtRoas(cur.roas), raw: cur.roas,
+      pop: { available: cmp.pop.available, value: pop.spend>0 ? pop.revenue/pop.spend : 0 },
+      yoy: { available: cmp.yoy.available, value: yoy.spend>0 ? yoy.revenue/yoy.spend : 0 } },
+    { label: 'Orders (Shopify)', value: fmtNumber(cur.orders), raw: cur.orders,
+      pop: { available: cmp.pop.available, value: pop.orders }, yoy: { available: cmp.yoy.available, value: yoy.orders } }
+  ];
+
+  renderKpiCards(containerId, cards);
+}
+
+/* ── Google Ads / Meta / Shopify summary cards ──────────────────── */
+// Spend, Revenue, ROAS & Conversions for a single channel (Google Ads or Meta).
+function renderChannelSummary(suffix, channel, brand, market){
+  const channelKey = channel === 'Google Ads' ? 'Google' : 'Meta';
+  const labelEl = document.getElementById('periodLabel' + channelKey + '-' + suffix);
+  if (labelEl) labelEl.textContent = PERIOD_LABELS[currentPeriod];
+
+  const cmp = periodComparison(currentPeriod, channel, brand, market);
+  const cur = cmp.cur, pop = cmp.pop.value, yoy = cmp.yoy.value;
+
+  const cards = [
+    { label: 'Spend', value: fmtCurrency(cur.spend), raw: cur.spend,
+      pop: { available: cmp.pop.available, value: pop.spend }, yoy: { available: cmp.yoy.available, value: yoy.spend } },
+    { label: 'Revenue', value: fmtCurrency(cur.revenue), raw: cur.revenue,
+      pop: { available: cmp.pop.available, value: pop.revenue }, yoy: { available: cmp.yoy.available, value: yoy.revenue } },
+    { label: 'ROAS', value: fmtRoas(cur.roas), raw: cur.roas,
+      pop: { available: cmp.pop.available, value: pop.spend>0 ? pop.revenue/pop.spend : 0 },
+      yoy: { available: cmp.yoy.available, value: yoy.spend>0 ? yoy.revenue/yoy.spend : 0 } },
+    { label: 'Conversions', value: fmtNumber(cur.conversions), raw: cur.conversions,
+      pop: { available: cmp.pop.available, value: pop.conversions }, yoy: { available: cmp.yoy.available, value: yoy.conversions } }
+  ];
+
+  renderKpiCards('kpi' + channelKey + '-' + suffix, cards);
+}
+
+// Net Sales & Orders from Shopify.
+function renderShopifySummary(suffix, brand, market){
+  const labelEl = document.getElementById('periodLabelShopify-' + suffix);
+  if (labelEl) labelEl.textContent = PERIOD_LABELS[currentPeriod];
+
+  const cmp = periodComparison(currentPeriod, 'Shopify', brand, market);
+  const cur = cmp.cur, pop = cmp.pop.value, yoy = cmp.yoy.value;
+
+  const cards = [
+    { label: 'Net Sales', value: fmtCurrency(cur.revenue), raw: cur.revenue,
+      pop: { available: cmp.pop.available, value: pop.revenue }, yoy: { available: cmp.yoy.available, value: yoy.revenue } },
+    { label: 'Orders', value: fmtNumber(cur.orders), raw: cur.orders,
+      pop: { available: cmp.pop.available, value: pop.orders }, yoy: { available: cmp.yoy.available, value: yoy.orders } }
+  ];
+
+  renderKpiCards('kpiShopify-' + suffix, cards);
+}
+
+/* ── Total Summary: ROAS by Brand & Market table ────────────────── */
+function renderRoasTable(){
+  const table = document.getElementById('roasTable');
+  let head = `<thead><tr>
+    <th>Brand</th><th>Market</th>
+    <th>Google Ads ROAS (7d)</th><th>Meta ROAS (7d)</th>
+    <th>Google Ads ROAS (MTD)</th><th>Meta ROAS (MTD)</th>
+  </tr></thead>`;
+  let body = '<tbody>';
+  BRAND_ORDER.forEach(brand => {
+    BRAND_META[brand].markets.forEach(market => {
+      const g7  = sumDashboard('last7','Google Ads', brand, market);
+      const m7  = sumDashboard('last7','Meta', brand, market);
+      const gm  = sumDashboard('mtd','Google Ads', brand, market);
+      const mm  = sumDashboard('mtd','Meta', brand, market);
+      body += `<tr>
+        <td class="brand-cell"><span class="brand-pill ${brand}">${brand}</span></td>
+        <td>${market}</td>
+        <td>${fmtRoasCell(g7)}</td>
+        <td>${fmtRoasCell(m7)}</td>
+        <td>${fmtRoasCell(gm)}</td>
+        <td>${fmtRoasCell(mm)}</td>
+      </tr>`;
+    });
+  });
+  body += '</tbody>';
+  table.innerHTML = head + body;
+}
+
+/* ── Total Summary: Brand & Market breakdown ────────────────────── */
+function renderSummaryBreakdown(){
+  document.getElementById('periodLabel-summary').textContent = PERIOD_LABELS[currentPeriod];
+  const table = document.getElementById('breakdownTable-summary');
+  let head = `<thead><tr>
+    <th>Brand</th><th>Market</th>
+    <th>Google Spend</th><th>Meta Spend</th><th>Total Media Spend</th>
+    <th>Shopify Net Sales</th><th>Combined ROAS</th><th>Orders</th>
+  </tr></thead><tbody>`;
+  let totals = { gSpend:0, mSpend:0, totalSpend:0, netSales:0, orders:0 };
+  let body = '';
+  BRAND_ORDER.forEach(brand => {
+    BRAND_META[brand].markets.forEach(market => {
+      const g = sumDashboard(currentPeriod,'Google Ads', brand, market)[0] || {};
+      const m = sumDashboard(currentPeriod,'Meta', brand, market)[0] || {};
+      const c = sumDashboard(currentPeriod,'Combined', brand, market)[0] || {};
+      totals.gSpend += num(g.Spend); totals.mSpend += num(m.Spend);
+      totals.totalSpend += num(c.Spend); totals.netSales += num(c.Revenue);
+      totals.orders += num(c.Orders);
+      body += `<tr>
+        <td class="brand-cell"><span class="brand-pill ${brand}">${brand}</span></td>
+        <td>${market}</td>
+        <td>${fmtCurrency(g.Spend)}</td>
+        <td>${fmtCurrency(m.Spend)}</td>
+        <td>${fmtCurrency(c.Spend)}</td>
+        <td>${fmtCurrency(c.Revenue)}</td>
+        <td>${fmtRoas(c.ROAS)}</td>
+        <td>${fmtNumber(c.Orders)}</td>
+      </tr>`;
+    });
+  });
+  const totalRoas = totals.totalSpend > 0 ? totals.netSales / totals.totalSpend : 0;
+  body += `<tr style="font-weight:700; background:#f3ecdd;">
+    <td colspan="2">All Brands Total</td>
+    <td>${fmtCurrency(totals.gSpend)}</td>
+    <td>${fmtCurrency(totals.mSpend)}</td>
+    <td>${fmtCurrency(totals.totalSpend)}</td>
+    <td>${fmtCurrency(totals.netSales)}</td>
+    <td>${fmtRoas(totalRoas)}</td>
+    <td>${fmtNumber(totals.orders)}</td>
+  </tr>`;
+  table.innerHTML = head + body + '</tbody>';
+}
+
+/* ── Brand pages: Market / Region breakdown ─────────────────────── */
+function renderRegionTable(brand){
+  document.getElementById('periodLabel-' + brand).textContent = PERIOD_LABELS[currentPeriod];
+  const table = document.getElementById('regionTable-' + brand);
+  let head = `<thead><tr>
+    <th>Market</th>
+    <th>Google Spend</th><th>Google ROAS</th>
+    <th>Meta Spend</th><th>Meta ROAS</th>
+    <th>Total Media Spend</th><th>Shopify Net Sales</th>
+    <th>Combined ROAS</th><th>Orders</th>
+  </tr></thead><tbody>`;
+  let totals = { gSpend:0, mSpend:0, totalSpend:0, netSales:0, orders:0 };
+  let body = '';
+  BRAND_META[brand].markets.forEach(market => {
+    const g = sumDashboard(currentPeriod,'Google Ads', brand, market)[0] || {};
+    const m = sumDashboard(currentPeriod,'Meta', brand, market)[0] || {};
+    const c = sumDashboard(currentPeriod,'Combined', brand, market)[0] || {};
+    totals.gSpend += num(g.Spend); totals.mSpend += num(m.Spend);
+    totals.totalSpend += num(c.Spend); totals.netSales += num(c.Revenue);
+    totals.orders += num(c.Orders);
+    body += `<tr>
+      <td class="brand-cell">${market}</td>
+      <td>${fmtCurrency(g.Spend)}</td>
+      <td>${fmtRoas(g.ROAS)}</td>
+      <td>${fmtCurrency(m.Spend)}</td>
+      <td>${fmtRoas(m.ROAS)}</td>
+      <td>${fmtCurrency(c.Spend)}</td>
+      <td>${fmtCurrency(c.Revenue)}</td>
+      <td>${fmtRoas(c.ROAS)}</td>
+      <td>${fmtNumber(c.Orders)}</td>
+    </tr>`;
+  });
+  const totalRoas = totals.totalSpend > 0 ? totals.netSales / totals.totalSpend : 0;
+  body += `<tr style="font-weight:700; background:#f3ecdd;">
+    <td>${brand} Total</td>
+    <td>${fmtCurrency(totals.gSpend)}</td><td>—</td>
+    <td>${fmtCurrency(totals.mSpend)}</td><td>—</td>
+    <td>${fmtCurrency(totals.totalSpend)}</td>
+    <td>${fmtCurrency(totals.netSales)}</td>
+    <td>${fmtRoas(totalRoas)}</td>
+    <td>${fmtNumber(totals.orders)}</td>
+  </tr>`;
+  table.innerHTML = head + body + '</tbody>';
+}
+
+/* ── Month over Month trend charts (Google Ads & Meta) ──────────── */
+const momCharts = {};
+
+function destroyChart(key){
+  if (momCharts[key]) {
+    momCharts[key].destroy();
+    delete momCharts[key];
+  }
+}
+
+// One single-metric chart (Spend, Revenue or ROAS) for one platform, over
+// the last 12 months. Spend & Revenue are bar charts in $; ROAS is a line
+// chart in "x".
+function renderMetricTrendChart(canvasId, chartKey, title, channel, metric, brand, market, color){
+  if (typeof Chart === 'undefined') return;
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+
+  const months = last12MonthKeys();
+  const labels = months.map(m => m.label);
+  const data = months.map(m => aggregateMonthly(sumMonthly(m.key, channel, brand, market))[metric]);
+
+  const isRoas = metric === 'roas';
+
+  destroyChart(chartKey);
+  momCharts[chartKey] = new Chart(canvas, {
+    type: isRoas ? 'line' : 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: title, data, borderColor: color, backgroundColor: color, tension: 0.3 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: { display: true, text: title },
+        legend: { display: false }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: (v) => isRoas ? Number(v).toFixed(1) + 'x' : '$' + Number(v).toLocaleString('en-AU') } }
+      }
+    }
+  });
+}
+
+// Six MoM trend charts per page: Spend, Revenue & ROAS for Google Ads, then
+// the same three for Meta, each over the last 12 months.
+function renderPlatformTrendCharts(suffix, brand, market){
+  const goldColor = '#c9a227';
+  const roseColor = '#c2185b';
+
+  renderMetricTrendChart('trendChartGoogleSpend-' + suffix, 'trendGoogleSpend-' + suffix, 'Google Ads Spend', 'Google Ads', 'spend', brand, market, goldColor);
+  renderMetricTrendChart('trendChartGoogleRevenue-' + suffix, 'trendGoogleRevenue-' + suffix, 'Google Ads Revenue', 'Google Ads', 'revenue', brand, market, goldColor);
+  renderMetricTrendChart('trendChartGoogleRoas-' + suffix, 'trendGoogleRoas-' + suffix, 'Google Ads ROAS', 'Google Ads', 'roas', brand, market, goldColor);
+
+  renderMetricTrendChart('trendChartMetaSpend-' + suffix, 'trendMetaSpend-' + suffix, 'Meta Spend', 'Meta', 'spend', brand, market, roseColor);
+  renderMetricTrendChart('trendChartMetaRevenue-' + suffix, 'trendMetaRevenue-' + suffix, 'Meta Revenue', 'Meta', 'revenue', brand, market, roseColor);
+  renderMetricTrendChart('trendChartMetaRoas-' + suffix, 'trendMetaRoas-' + suffix, 'Meta ROAS', 'Meta', 'roas', brand, market, roseColor);
+}
+
+/* ── Render everything ───────────────────────────────────────── */
+function renderAll(){
+  if (!dashboardData.length) return;
+
+  renderKPIs('kpi-summary', null, null);
+  renderRoasTable();
+  renderChannelSummary('summary', 'Google Ads', null, null);
+  renderChannelSummary('summary', 'Meta', null, null);
+  renderShopifySummary('summary', null, null);
+  renderPlatformTrendCharts('summary', null, null);
+  renderSummaryBreakdown();
+
+  BRAND_ORDER.forEach(brand => {
+    renderKPIs('kpi-' + brand, brand, null);
+    renderChannelSummary(brand, 'Google Ads', brand, null);
+    renderChannelSummary(brand, 'Meta', brand, null);
+    renderShopifySummary(brand, brand, null);
+    renderPlatformTrendCharts(brand, brand, null);
+    renderRegionTable(brand);
+
+    BRAND_META[brand].markets.forEach(market => {
+      const id = marketId(brand, market);
+      renderKPIs('kpi-' + id, brand, market);
+      renderChannelSummary(id, 'Google Ads', brand, market);
+      renderChannelSummary(id, 'Meta', brand, market);
+      renderShopifySummary(id, brand, market);
+      renderPlatformTrendCharts(id, brand, market);
+    });
+  });
+}
+
+/* ── Controls ─────────────────────────────────────────────────── */
+document.getElementById('periodSelect').addEventListener('change', (e) => {
+  currentPeriod = e.target.value;
+  renderAll();
+});
+document.getElementById('reloadBtn').addEventListener('click', loadAll);
+
+/* ── Init ─────────────────────────────────────────────────────── */
+buildSidebar();
+buildMarketPages();
+setupNavigation();
+loadAll();
+setInterval(loadAll, CONFIG.AUTO_REFRESH_MINUTES * 60 * 1000);
+</script>
+
+</body>
+</html>
