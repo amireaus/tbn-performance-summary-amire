@@ -795,10 +795,16 @@ function periodComparison(periodKey, channel, brand, market){
   const curRows = sumDashboard(periodKey, channel, brand, market);
   const popRows = sumDashboard(periodKey + '_prior', channel, brand, market);
   const yoyRows = sumDashboard(periodKey + '_lastyear', channel, brand, market);
+  const popAgg  = aggregate(popRows);
+  const yoyAgg  = aggregate(yoyRows);
+  // Mark as available only when the comparison period has at least some
+  // meaningful data (spend or revenue > 0), so we don't show deltas against
+  // empty or zero-only rows.
+  const hasData = (agg) => agg.spend > 0 || agg.revenue > 0 || agg.orders > 0;
   return {
     cur: aggregate(curRows),
-    pop: { available: popRows.length > 0, value: aggregate(popRows) },
-    yoy: { available: yoyRows.length > 0, value: aggregate(yoyRows) }
+    pop: { available: popRows.length > 0 && hasData(popAgg), value: popAgg },
+    yoy: { available: yoyRows.length > 0 && hasData(yoyAgg), value: yoyAgg }
   };
 }
 
