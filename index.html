@@ -703,7 +703,13 @@ function generateSampleMonthlyTrends(){
 }
 
 /* ── Data helpers ────────────────────────────────────────────── */
-function num(v){ return (typeof v === 'number' && !isNaN(v)) ? v : 0; }
+function num(v){
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  // Handle strings that come through from the CSV when cells are plain-text formatted
+  const parsed = parseFloat(String(v).replace(/[$,%]/g, '').replace(/,/g, ''));
+  return isNaN(parsed) ? 0 : parsed;
+}
 
 // Returns the 12 'YYYY-MM' month keys covering 11 months ago through the
 // current month (oldest first), each paired with a short display label.
